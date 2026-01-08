@@ -1,4 +1,4 @@
-ingore/
+**/ignore/
 
 __pycache__/
 *.pyc
