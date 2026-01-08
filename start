@@ -1,0 +1,19 @@
+#!/bin/bash
+
+echo "==============================="
+echo "Starting bot (Linux)"
+echo "==============================="
+
+echo "Installing requirements..."
+pip3 install -r requirements.txt
+
+echo
+echo "==============================="
+echo "GIT PULL STEP"
+echo "Please edit this file and enable git pull if needed"
+echo "==============================="
+# git pull
+
+echo
+echo "Starting bot..."
+python3 bot.py

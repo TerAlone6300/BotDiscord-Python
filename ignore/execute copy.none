@@ -1,0 +1,191 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+OWNER_ID = 1076150512224833536  # 👈 đổi thành ID Discord của bạn
+
+class ExecuteCommand(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(name="execute", description="Thực thi các hành động quản trị (ẩn, chỉ admin được dùng).")
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="delete_channel", value="delete_channel"),
+            app_commands.Choice(name="create_channel", value="create_channel"),
+            app_commands.Choice(name="kick", value="kick"),
+            app_commands.Choice(name="ban", value="ban"),
+            app_commands.Choice(name="unban", value="unban"),
+            app_commands.Choice(name="mute", value="mute"),
+            app_commands.Choice(name="unmute", value="unmute"),
+            app_commands.Choice(name="lock", value="lock"),
+            app_commands.Choice(name="unlock", value="unlock"),
+            app_commands.Choice(name="send_message", value="send_message"),
+            app_commands.Choice(name="react", value="react"),
+            app_commands.Choice(name="rename_channel", value="rename_channel"),
+            app_commands.Choice(name="move_member", value="move_member"),
+            app_commands.Choice(name="purge", value="purge"),
+            app_commands.Choice(name="status", value="status"),
+        ]
+    )
+    @app_commands.describe(
+        action="Chọn hành động muốn thực thi",
+        arg1="Tham số 1 (user ID / channel ID / message / ...)",
+        arg2="Tham số 2 (tùy action)",
+        arg3="Tham số 3 (tùy action)",
+        arg4="Tham số 4 (tùy action)"
+    )
+    async def execute(
+        self,
+        interaction: discord.Interaction,
+        action: app_commands.Choice[str],
+        arg1: str = None,
+        arg2: str = None,
+        arg3: str = None,
+        arg4: str = None
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        # check người được phép dùng
+        if interaction.user.id != OWNER_ID:
+            return await interaction.followup.send("❌ Bạn không có quyền dùng lệnh này.", ephemeral=True)
+
+        guild = interaction.guild
+        action_name = action.value
+
+        # =========================== LOGIC CỤ THỂ ===========================
+
+        if action_name == "delete_channel":
+            if not arg1:
+                return await interaction.followup.send("⚠️ Thiếu channel ID hoặc tên.")
+            channel = guild.get_channel(int(arg1)) or discord.utils.get(guild.channels, name=arg1)
+            if not channel:
+                return await interaction.followup.send("❌ Không tìm thấy channel.")
+            await channel.delete(reason=f"Execute bởi {interaction.user}")
+            return await interaction.followup.send(f"🗑️ Đã xóa kênh `{channel.name}`.")
+
+        elif action_name == "create_channel":
+            if not arg1:
+                return await interaction.followup.send("⚠️ Nhập tên channel cần tạo.")
+            ch = await guild.create_text_channel(name=arg1, reason=f"Execute bởi {interaction.user}")
+            return await interaction.followup.send(f"✅ Đã tạo kênh mới: {ch.mention}")
+
+        elif action_name == "kick":
+            if not arg1:
+                return await interaction.followup.send("⚠️ Thiếu user ID.")
+            member = guild.get_member(int(arg1))
+            if not member:
+                return await interaction.followup.send("❌ Không tìm thấy thành viên.")
+            await member.kick(reason=f"Execute bởi {interaction.user}")
+            return await interaction.followup.send(f"👢 Đã kick `{member}` khỏi server.")
+
+        elif action_name == "ban":
+            if not arg1:
+                return await interaction.followup.send("⚠️ Thiếu user ID.")
+            member = guild.get_member(int(arg1))
+            if not member:
+                return await interaction.followup.send("❌ Không tìm thấy thành viên.")
+            await member.ban(reason=f"Execute bởi {interaction.user}")
+            return await interaction.followup.send(f"🔨 Đã ban `{member}`.")
+
+        elif action_name == "unban":
+            if not arg1:
+                return await interaction.followup.send("⚠️ Nhập user ID hoặc tên.")
+            bans = await guild.bans()
+            for entry in bans:
+                if str(entry.user.id) == arg1 or entry.user.name == arg1:
+                    await guild.unban(entry.user)
+                    return await interaction.followup.send(f"✅ Đã unban `{entry.user}`.")
+            return await interaction.followup.send("❌ Không tìm thấy user trong danh sách ban.")
+
+        elif action_name == "mute":
+            if not arg1:
+                return await interaction.followup.send("⚠️ Thiếu user ID.")
+            member = guild.get_member(int(arg1))
+            if not member:
+                return await interaction.followup.send("❌ Không tìm thấy thành viên.")
+            mute_role = discord.utils.get(guild.roles, name="Muted")
+            if not mute_role:
+                mute_role = await guild.create_role(name="Muted")
+                for ch in guild.channels:
+                    await ch.set_permissions(mute_role, send_messages=False, speak=False)
+            await member.add_roles(mute_role)
+            return await interaction.followup.send(f"🔇 Đã mute `{member}`.")
+
+        elif action_name == "unmute":
+            if not arg1:
+                return await interaction.followup.send("⚠️ Thiếu user ID.")
+            member = guild.get_member(int(arg1))
+            mute_role = discord.utils.get(guild.roles, name="Muted")
+            if member and mute_role:
+                await member.remove_roles(mute_role)
+                return await interaction.followup.send(f"🔊 Đã unmute `{member}`.")
+            return await interaction.followup.send("❌ Không tìm thấy hoặc chưa mute.")
+
+        elif action_name == "lock":
+            channel = guild.get_channel(int(arg1)) if arg1 else interaction.channel
+            await channel.set_permissions(guild.default_role, send_messages=False)
+            return await interaction.followup.send(f"🔒 Đã khóa `{channel.name}`.")
+
+        elif action_name == "unlock":
+            channel = guild.get_channel(int(arg1)) if arg1 else interaction.channel
+            await channel.set_permissions(guild.default_role, send_messages=True)
+            return await interaction.followup.send(f"🔓 Đã mở khóa `{channel.name}`.")
+
+        elif action_name == "send_message":
+            if not arg1 or not arg2:
+                return await interaction.followup.send("⚠️ arg1: channel ID, arg2: nội dung tin nhắn.")
+            channel = guild.get_channel(int(arg1))
+            if not channel:
+                return await interaction.followup.send("❌ Không tìm thấy channel.")
+            await channel.send(arg2)
+            return await interaction.followup.send(f"📤 Đã gửi tin nhắn đến `{channel.name}`.")
+
+        elif action_name == "react":
+            if not (arg1 and arg2 and arg3):
+                return await interaction.followup.send("⚠️ arg1: channel ID, arg2: message ID, arg3: emoji.")
+            channel = guild.get_channel(int(arg1))
+            if not channel:
+                return await interaction.followup.send("❌ Không tìm thấy channel.")
+            try:
+                msg = await channel.fetch_message(int(arg2))
+                await msg.add_reaction(arg3)
+                return await interaction.followup.send(f"✅ Đã react {arg3} vào tin nhắn.")
+            except Exception as e:
+                return await interaction.followup.send(f"❌ Lỗi: {e}")
+
+        elif action_name == "rename_channel":
+            if not (arg1 and arg2):
+                return await interaction.followup.send("⚠️ arg1: channel ID, arg2: tên mới.")
+            ch = guild.get_channel(int(arg1))
+            if not ch:
+                return await interaction.followup.send("❌ Không tìm thấy channel.")
+            await ch.edit(name=arg2)
+            return await interaction.followup.send(f"✏️ Đã đổi tên channel thành `{arg2}`.")
+
+        elif action_name == "move_member":
+            if not (arg1 and arg2):
+                return await interaction.followup.send("⚠️ arg1: user ID, arg2: voice channel ID.")
+            member = guild.get_member(int(arg1))
+            vc = guild.get_channel(int(arg2))
+            if not (member and vc):
+                return await interaction.followup.send("❌ Không tìm thấy user hoặc voice channel.")
+            await member.move_to(vc)
+            return await interaction.followup.send(f"🎧 Đã chuyển `{member}` đến `{vc.name}`.")
+
+        elif action_name == "purge":
+            amount = int(arg1) if arg1 else 10
+            await interaction.channel.purge(limit=amount)
+            return await interaction.followup.send(f"🧹 Đã xóa {amount} tin nhắn gần nhất.")
+
+        elif action_name == "status":
+            if not arg1:
+                return await interaction.followup.send("⚠️ Nhập status bạn muốn set.")
+            await self.bot.change_presence(activity=discord.Game(name=arg1))
+            return await interaction.followup.send(f"💬 Bot status đổi thành: `{arg1}`.")
+
+        else:
+            return await interaction.followup.send(f"⚙️ Action `{action_name}` chưa được định nghĩa.")
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(ExecuteCommand(bot))
